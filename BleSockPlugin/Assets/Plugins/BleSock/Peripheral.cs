@@ -39,6 +39,7 @@ namespace BleSock
 
         public virtual bool Initialize(string serviceUUID, string uploadUUID, string downloadUUID)
         {
+            Debug.LogError("Unsupported platform");
             return false;
         }
 

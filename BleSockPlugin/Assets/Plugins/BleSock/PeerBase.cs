@@ -66,6 +66,7 @@ namespace BleSock
 
         public virtual void Cleanup()
         {
+            onBluetoothRequire = null;
             onReady = null;
             onFail = null;
             onPlayerJoin = null;
@@ -73,12 +74,14 @@ namespace BleSock
             onReceive = null;
 
             mReady = false;
+            mSynchronizationContext = null;
             mServiceUUID = null;
             mUploadUUID = null;
             mDownloadUUID = null;
             mAuthData = null;
             mLocalPlayerName = null;
             mPlayers.Clear();
+            mMessageBuffer = null;
         }
 
         public void Dispose()
@@ -91,8 +94,8 @@ namespace BleSock
         protected const int MESSAGE_SIZE_MAX = 4096;
         protected const int PLAYER_NAME_LENGTH_MAX = 32;
 
-        protected const byte SYSMSG_REQUEST_PING            = 0;
-        protected const byte SYSMSG_RESPOND_PING            = 1;
+        // protected const byte SYSMSG_REQUEST_PING            = 0;
+        // protected const byte SYSMSG_RESPOND_PING            = 1;
 
         protected const byte SYSMSG_REQUEST_AUTHENTICATION  = 10;
         protected const byte SYSMSG_ACCEPT_AUTHENTICATION   = 11;
@@ -113,7 +116,7 @@ namespace BleSock
         protected byte[] mAuthData;
         protected string mLocalPlayerName;
         protected List<Player> mPlayers = new List<Player>();
-        protected Buffer mMessageBuffer = new Buffer();
+        protected Buffer mMessageBuffer;
 
 
         protected void InitializeInternal(string protocolIdentifier, string playerName, SynchronizationContext synchronizationContext)
@@ -144,11 +147,12 @@ namespace BleSock
             mServiceUUID = new Guid(deriveBytes.GetBytes(16)).ToString("D");
             mUploadUUID = new Guid(deriveBytes.GetBytes(16)).ToString("D");
             mDownloadUUID = new Guid(deriveBytes.GetBytes(16)).ToString("D");
-            Debug.LogFormat("serviceUUID: {0} uploadUUID: {1} downloadUUID: {2}", mServiceUUID, mUploadUUID, mDownloadUUID);
+            // Debug.LogFormat("serviceUUID: {0} uploadUUID: {1} downloadUUID: {2}", mServiceUUID, mUploadUUID, mDownloadUUID);
 
             mAuthData = deriveBytes.GetBytes(16);
 
             mLocalPlayerName = playerName;
+            mMessageBuffer = new Buffer();
         }
 
         protected int PrepareSend(byte[] message, int messageSize, int receiver)
