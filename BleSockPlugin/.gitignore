@@ -1,0 +1,26 @@
+# Unity Project
+[Ll]ibrary/
+[Tt]emp/
+[Bb]uild/
+[Oo]bj/
+[Ll]og/
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.userprefs
+*.usertasks
+
+# OSX
+.DS_Store
+*.swp
+
+# Android Build
+*.apk
+
+# iOS Build
+*.ipa
+*.dSYM.zip
+
+# Visual Studio
+.vs/
