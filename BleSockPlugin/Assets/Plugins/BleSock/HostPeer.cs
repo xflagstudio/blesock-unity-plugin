@@ -237,11 +237,11 @@ namespace BleSock
 
                 // SYSMSG_REQUEST_AUTHENTICATION
 
-                mMessageBuffer.Clear();
-                mMessageBuffer.Write(SYSMSG_REQUEST_AUTHENTICATION);
-                mMessageBuffer.WriteBuffer(authData, 0, authData.Length);
+                mSendBuffer.Clear();
+                mSendBuffer.Write(SYSMSG_REQUEST_AUTHENTICATION);
+                mSendBuffer.WriteBytes(authData, 0, authData.Length);
 
-                if (!mImplementation.SendDirect(mMessageBuffer.RawData, mMessageBuffer.Size, connectionId))
+                if (!mImplementation.SendDirect(mSendBuffer.RawData, mSendBuffer.Size, connectionId))
                 {
                     Debug.LogWarning("Failed to send SYSMSG_REQUEST_AUTHENTICATION");
                     mImplementation.Invalidate(connectionId);
@@ -289,15 +289,15 @@ namespace BleSock
                 {
                     // SYSMSG_PLAYER_LEAVE
 
-                    mMessageBuffer.Clear();
-                    mMessageBuffer.Write(SYSMSG_PLAYER_LEAVE);
-                    mMessageBuffer.Write((UInt16)context.playerId);
+                    mSendBuffer.Clear();
+                    mSendBuffer.Write(SYSMSG_PLAYER_LEAVE);
+                    mSendBuffer.Write((UInt16)context.playerId);
 
                     foreach (var ctx in mCentralContexts)
                     {
                         if (ctx.playerId != 0)
                         {
-                            if (!mImplementation.SendDirect(mMessageBuffer.RawData, mMessageBuffer.Size, ctx.connectionId))
+                            if (!mImplementation.SendDirect(mSendBuffer.RawData, mSendBuffer.Size, ctx.connectionId))
                             {
                                 Debug.LogWarning("Failed to send SYSMSG_PLAYER_LEAVE");
                             }
@@ -315,13 +315,15 @@ namespace BleSock
         {
             Post(() =>
             {
-                var buffer = new Buffer(message, message.Length);
+                mReceiveBuffer.Clear();
+                mReceiveBuffer.WriteBytes(message, 0, message.Length);
+                mReceiveBuffer.Seek(0);
 
-                byte msgType = buffer.ReadByte();
+                byte msgType = mReceiveBuffer.ReadByte();
                 switch (msgType)
                 {
                     case SYSMSG_RESPOND_AUTHENTICATION:
-                        OnReceive_RespondAuthentication(buffer, connectionId);
+                        OnReceive_RespondAuthentication(connectionId);
                         break;
 
 
@@ -333,7 +335,7 @@ namespace BleSock
             });
         }
 
-        private void OnReceive_RespondAuthentication(Buffer buffer, int connectionId)
+        private void OnReceive_RespondAuthentication(int connectionId)
         {
             var context = mCentralContexts.Where(ctx => ctx.connectionId == connectionId).FirstOrDefault();
             if (context == null)
@@ -343,9 +345,9 @@ namespace BleSock
             }
 
             var receivedHash = new byte[32];
-            buffer.ReadBuffer(receivedHash, 0, receivedHash.Length);
+            mReceiveBuffer.ReadBytes(receivedHash, 0, receivedHash.Length);
 
-            var playerName = buffer.ReadString();
+            var playerName = mReceiveBuffer.ReadString();
 
             if (context.playerId != 0)
             {
@@ -377,18 +379,18 @@ namespace BleSock
 
             // SYSMSG_ACCEPT_AUTHENTICATION
 
-            mMessageBuffer.Clear();
-            mMessageBuffer.Write(SYSMSG_ACCEPT_AUTHENTICATION);
-            mMessageBuffer.Write((UInt16)context.playerId);
-            mMessageBuffer.Write((byte)mPlayers.Count);
+            mSendBuffer.Clear();
+            mSendBuffer.Write(SYSMSG_ACCEPT_AUTHENTICATION);
+            mSendBuffer.Write((UInt16)context.playerId);
+            mSendBuffer.Write((byte)mPlayers.Count);
 
             foreach (var ply in mPlayers)
             {
-                mMessageBuffer.Write((UInt16)ply.PlayerId);
-                mMessageBuffer.Write(ply.PlayerName);
+                mSendBuffer.Write((UInt16)ply.PlayerId);
+                mSendBuffer.WriteString(ply.PlayerName);
             }
 
-            if (!mImplementation.SendDirect(mMessageBuffer.RawData, mMessageBuffer.Size, connectionId))
+            if (!mImplementation.SendDirect(mSendBuffer.RawData, mSendBuffer.Size, connectionId))
             {
                 Debug.LogWarning("Failed to send SYSMSG_ACCEPT_AUTHENTICATION");
                 mImplementation.Invalidate(connectionId);
@@ -397,16 +399,16 @@ namespace BleSock
 
             // SYSMSG_PLAYER_JOIN
 
-            mMessageBuffer.Clear();
-            mMessageBuffer.Write(SYSMSG_PLAYER_JOIN);
-            mMessageBuffer.Write((UInt16)context.playerId);
-            mMessageBuffer.Write(playerName);
+            mSendBuffer.Clear();
+            mSendBuffer.Write(SYSMSG_PLAYER_JOIN);
+            mSendBuffer.Write((UInt16)context.playerId);
+            mSendBuffer.WriteString(playerName);
 
             foreach (var ctx in mCentralContexts)
             {
                 if ((ctx.playerId != 0) && (ctx != context))
                 {
-                    if (!mImplementation.SendDirect(mMessageBuffer.RawData, mMessageBuffer.Size, ctx.connectionId))
+                    if (!mImplementation.SendDirect(mSendBuffer.RawData, mSendBuffer.Size, ctx.connectionId))
                     {
                         Debug.LogWarning("Failed to send SYSMSG_PLAYER_JOIN");
                     }

@@ -303,25 +303,28 @@ namespace BleSock
 
                 if (sender == 0)
                 {
-                    var buffer = new Buffer(message, message.Length);
-                    byte msgType = buffer.ReadByte();
+                    mReceiveBuffer.Clear();
+                    mReceiveBuffer.WriteBytes(message, 0, message.Length);
+                    mReceiveBuffer.Seek(0);
+
+                    byte msgType = mReceiveBuffer.ReadByte();
 
                     switch (msgType)
                     {
                         case SYSMSG_REQUEST_AUTHENTICATION:
-                            OnReceive_RequestAuthentication(buffer);
+                            OnReceive_RequestAuthentication();
                             break;
 
                         case SYSMSG_ACCEPT_AUTHENTICATION:
-                            OnReceive_AcceptAuthentication(buffer);
+                            OnReceive_AcceptAuthentication();
                             break;
 
                         case SYSMSG_PLAYER_JOIN:
-                            OnReceive_PlayerJoin(buffer);
+                            OnReceive_PlayerJoin();
                             break;
 
                         case SYSMSG_PLAYER_LEAVE:
-                            OnReceive_PlayerLeave(buffer);
+                            OnReceive_PlayerLeave();
                             break;
 
 
@@ -338,7 +341,7 @@ namespace BleSock
             });
         }
 
-        private void OnReceive_RequestAuthentication(Buffer buffer)
+        private void OnReceive_RequestAuthentication()
         {
             if (mState != State.Authenticate)
             {
@@ -348,25 +351,25 @@ namespace BleSock
 
             var bytes = new byte[32];
             Array.Copy(mAuthData, 0, bytes, 0, 16);
-            buffer.ReadBuffer(bytes, 16, 16);
+            mReceiveBuffer.ReadBytes(bytes, 16, 16);
 
             var hash = new SHA256Managed().ComputeHash(bytes);
 
             // SYSMSG_RESPOND_AUTHENTICATION
 
-            mMessageBuffer.Clear();
-            mMessageBuffer.Write(SYSMSG_RESPOND_AUTHENTICATION);
-            mMessageBuffer.WriteBuffer(hash, 0, 32);
-            mMessageBuffer.Write(mLocalPlayerName);
+            mSendBuffer.Clear();
+            mSendBuffer.Write(SYSMSG_RESPOND_AUTHENTICATION);
+            mSendBuffer.WriteBytes(hash, 0, 32);
+            mSendBuffer.WriteString(mLocalPlayerName);
 
-            if (!mImplementation.Send(mMessageBuffer.RawData, mMessageBuffer.Size, 0))
+            if (!mImplementation.Send(mSendBuffer.RawData, mSendBuffer.Size, 0))
             {
                 Debug.LogWarning("Failed to send SYSMSG_RESPOND_AUTHENTICATION");
                 mImplementation.Disconnect();
             }
         }
 
-        private void OnReceive_AcceptAuthentication(Buffer buffer)
+        private void OnReceive_AcceptAuthentication()
         {
             if (mState != State.Authenticate)
             {
@@ -374,13 +377,13 @@ namespace BleSock
                 return;
             }
 
-            mLocalPlayerId = buffer.ReadUInt16();
-            int numPlayers = buffer.ReadByte();
+            mLocalPlayerId = mReceiveBuffer.ReadUInt16();
+            int numPlayers = mReceiveBuffer.ReadByte();
 
             for (int i = 0; i < numPlayers; ++i)
             {
-                int playerId = buffer.ReadUInt16();
-                var playerName = buffer.ReadString();
+                int playerId = mReceiveBuffer.ReadUInt16();
+                var playerName = mReceiveBuffer.ReadString();
 
                 var player = new Player(playerId, playerName);
                 mPlayers.Add(player);
@@ -406,7 +409,7 @@ namespace BleSock
             }
         }
 
-        private void OnReceive_PlayerJoin(Buffer buffer)
+        private void OnReceive_PlayerJoin()
         {
             if (mState != State.Online)
             {
@@ -414,15 +417,15 @@ namespace BleSock
                 return;
             }
 
-            int playerId = buffer.ReadUInt16();
-            var playerName = buffer.ReadString();
+            int playerId = mReceiveBuffer.ReadUInt16();
+            var playerName = mReceiveBuffer.ReadString();
             var player = new Player(playerId, playerName);
             mPlayers.Add(player);
 
             InvokeOnPlayerJoin(player);
         }
 
-        private void OnReceive_PlayerLeave(Buffer buffer)
+        private void OnReceive_PlayerLeave()
         {
             if (mState != State.Online)
             {
@@ -430,7 +433,7 @@ namespace BleSock
                 return;
             }
 
-            int playerId = buffer.ReadUInt16();
+            int playerId = mReceiveBuffer.ReadUInt16();
 
             var player = mPlayers.Where(p => p.PlayerId == playerId).FirstOrDefault();
             if (player == null)

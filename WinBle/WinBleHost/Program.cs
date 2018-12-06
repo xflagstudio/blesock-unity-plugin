@@ -34,7 +34,7 @@ namespace BleSock.Windows
                 Utils.Error(e.ToString());
             }
 
-            Console.ReadKey(); // TODO
+            Console.ReadKey();
         }
     }
 }

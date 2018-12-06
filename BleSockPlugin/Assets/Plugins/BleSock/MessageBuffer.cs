@@ -1,9 +1,13 @@
 ﻿using System;
+using System.IO;
+using System.Runtime.InteropServices;
 using System.Text;
+
+using UnityEngine;
 
 namespace BleSock
 {
-    public class Buffer
+    public class MessageBuffer
     {
         // Properties
 
@@ -39,35 +43,24 @@ namespace BleSock
             }
         }
 
-        // Constructor
-
-        public Buffer(int capacity = 1024)
+        public bool IsReallocAllowed
         {
-            if (capacity <= 0)
+            get
             {
-                throw new Exception("Invalid capacity");
+                return mReallocAllowed;
             }
+        }
+
+        // Constructors
+
+        public MessageBuffer(int capacity = 1024, bool reallocAllowed = true)
+        {
+            Debug.Assert(capacity > 0);
 
             mRawData = new byte[capacity];
             mSize = 0;
             mPosition = 0;
-        }
-
-        public Buffer(byte[] bytes, int size)
-        {
-            if (bytes == null)
-            {
-                throw new Exception("Invalid bytes");
-            }
-
-            if (size > bytes.Length)
-            {
-                throw new Exception("Invalid size");
-            }
-
-            mRawData = bytes;
-            mSize = size;
-            mPosition = 0;
+            mReallocAllowed = reallocAllowed;
         }
 
         // Methods
@@ -80,10 +73,8 @@ namespace BleSock
 
         public void Seek(int position)
         {
-            if ((position < 0) || (position > mSize))
-            {
-                throw new Exception("Invalid position");
-            }
+            Debug.Assert(position >= 0);
+            Debug.Assert(position < mSize);
 
             mPosition = position;
         }
@@ -96,8 +87,12 @@ namespace BleSock
             return bytes;
         }
 
+        public ArraySegment<byte> GetArraySegment()
+        {
+            return new ArraySegment<byte>(mRawData, 0, mSize);
+        }
 
-        public void Write(Int32 value)
+        public void Write(int value)
         {
             Write((byte)value);
             Write((byte)(value >> 8));
@@ -105,7 +100,7 @@ namespace BleSock
             Write((byte)(value >> 24));
         }
 
-        public void Write(UInt32 value)
+        public void Write(uint value)
         {
             Write((byte)value);
             Write((byte)(value >> 8));
@@ -113,13 +108,13 @@ namespace BleSock
             Write((byte)(value >> 24));
         }
 
-        public void Write(Int16 value)
+        public void Write(short value)
         {
             Write((byte)value);
             Write((byte)(value >> 8));
         }
 
-        public void Write(UInt16 value)
+        public void Write(ushort value)
         {
             Write((byte)value);
             Write((byte)(value >> 8));
@@ -143,109 +138,107 @@ namespace BleSock
             Write((byte)(value ? 1 : 0));
         }
 
-        public void Write(string value, bool large = false)
+        public void Write(float value)
         {
-            if (value == null)
-            {
-                throw new Exception("Value is null");
-            }
+            mTypeConvert.single = value;
 
-            int size = Encoding.UTF8.GetByteCount(value);
+            Write(mTypeConvert.int32);
+        }
+
+        public void WriteString(string str, bool large = false)
+        {
+            Debug.Assert(str != null);
+
+            int size = Encoding.UTF8.GetByteCount(str);
 
             if (large)
             {
-                if (size > UInt16.MaxValue)
-                {
-                    throw new Exception("Value too long");
-                }
+                Debug.Assert(size <= UInt16.MaxValue);
 
                 Write((UInt16)size);
             }
             else
             {
-                if (size > byte.MaxValue)
-                {
-                    throw new Exception("Value too long");
-                }
+                Debug.Assert(size <= byte.MaxValue);
 
                 Write((byte)size);
             }
 
             PrepareWrite(size);
 
-            Encoding.UTF8.GetBytes(value, 0, value.Length, mRawData, mPosition);
+            Encoding.UTF8.GetBytes(str, 0, str.Length, mRawData, mPosition);
 
             mPosition += size;
             mSize = Math.Max(mPosition, mSize);
         }
 
-        public void WriteBuffer(byte[] buffer, int offset, int count)
+        public void WriteBytes(byte[] bytes, int offset, int count)
         {
-            if (buffer == null)
-            {
-                throw new Exception("Buffer is null");
-            }
-
-            if (offset < 0)
-            {
-                throw new Exception("Invalid offset");
-            }
-
-            if (count < 0)
-            {
-                throw new Exception("Invalid count");
-            }
-
-            if (offset + count > buffer.Length)
-            {
-                throw new Exception("Buffer over flow");
-            }
+            Debug.Assert(bytes != null);
+            Debug.Assert(offset >= 0);
+            Debug.Assert(count >= 0);
+            Debug.Assert(offset + count <= bytes.Length);
 
             PrepareWrite(count);
 
-            Array.Copy(buffer, offset, mRawData, mPosition, count);
+            Array.Copy(bytes, offset, mRawData, mPosition, count);
 
             mPosition += count;
+            mSize = Math.Max(mPosition, mSize);
+        }
+
+        public void WriteStream(Stream stream, int length)
+        {
+            Debug.Assert(stream != null);
+            Debug.Assert(length >= 0);
+            Debug.Assert(length <= stream.Length - stream.Position);
+
+            PrepareWrite(length);
+
+            int size = stream.Read(mRawData, mPosition, length);
+            Debug.Assert(size == length);
+
+            mPosition += length;
             mSize = Math.Max(mPosition, mSize);
         }
 
 
         public int ReadInt32()
         {
-            PrepareRead(sizeof(Int32));
+            PrepareRead(sizeof(int));
 
             int result = BitConverter.ToInt32(mRawData, mPosition);
-            mPosition += sizeof(Int32);
+            mPosition += sizeof(int);
 
             return result;
         }
 
         public uint ReadUInt32()
         {
-            PrepareRead(sizeof(UInt32));
+            PrepareRead(sizeof(uint));
 
             uint result = BitConverter.ToUInt32(mRawData, mPosition);
-            mPosition += sizeof(UInt32);
+            mPosition += sizeof(uint);
 
             return result;
         }
 
         public short ReadInt16()
         {
-            PrepareRead(sizeof(Int16));
+            PrepareRead(sizeof(short));
 
             short result = BitConverter.ToInt16(mRawData, mPosition);
-            mPosition += sizeof(Int16);
+            mPosition += sizeof(short);
 
             return result;
         }
 
         public ushort ReadUInt16()
         {
-            PrepareRead(sizeof(UInt16));
+            PrepareRead(sizeof(ushort));
 
             ushort result = BitConverter.ToUInt16(mRawData, mPosition);
-            mPosition += sizeof(UInt16);
+            mPosition += sizeof(ushort);
 
             return result;
         }
@@ -275,6 +268,16 @@ namespace BleSock
             return (ReadByte() > 0);
         }
 
+        public float ReadSingle()
+        {
+            PrepareRead(sizeof(float));
+
+            float result = BitConverter.ToSingle(mRawData, mPosition);
+            mPosition += sizeof(float);
+
+            return result;
+        }
+
         public string ReadString(bool large = false)
         {
             int size = large ? ReadUInt16() : ReadByte();
@@ -286,45 +289,65 @@ namespace BleSock
             return result;
         }
 
-        public void ReadBuffer(byte[] buffer, int offset, int count)
+        public void ReadBytes(byte[] bytes, int offset, int count)
         {
-            if (buffer == null)
-            {
-                throw new Exception("Buffer is null");
-            }
-
-            if (offset < 0)
-            {
-                throw new Exception("Invalid offset");
-            }
-
-            if (count < 0)
-            {
-                throw new Exception("Invalid count");
-            }
-
-            if (offset + count > buffer.Length)
-            {
-                throw new Exception("Buffer over flow");
-            }
+            Debug.Assert(bytes != null);
+            Debug.Assert(offset >= 0);
+            Debug.Assert(count >= 0);
+            Debug.Assert(offset + count <= bytes.Length);
 
             PrepareRead(count);
 
-            Array.Copy(mRawData, mPosition, buffer, offset, count);
+            Array.Copy(mRawData, mPosition, bytes, offset, count);
 
             mPosition += count;
         }
 
         // Internal
 
+        [StructLayout(LayoutKind.Explicit)]
+        private struct TypeConvert
+        {
+            [FieldOffset(0)]
+            public int int32;
+
+            [FieldOffset(0)]
+            public uint uint32;
+
+            [FieldOffset(0)]
+            public short int16;
+
+            [FieldOffset(0)]
+            public ushort ushort16;
+
+            [FieldOffset(0)]
+            public float single;
+
+            [FieldOffset(0)]
+            public byte byte0;
+
+            [FieldOffset(1)]
+            public byte byte1;
+
+            [FieldOffset(2)]
+            public byte byte2;
+
+            [FieldOffset(3)]
+            public byte byte3;
+        };
+
         private byte[] mRawData;
         private int mSize;
         private int mPosition;
+        private bool mReallocAllowed;
+        private TypeConvert mTypeConvert = new TypeConvert();
 
         private void PrepareWrite(int size)
         {
             if (mPosition + size > mRawData.Length)
             {
+                Debug.Assert(mReallocAllowed);
+
                 int newSize = mRawData.Length;
                 while (newSize < mPosition + size)
                 {
@@ -337,10 +360,7 @@ namespace BleSock
 
         private void PrepareRead(int size)
         {
-            if (mPosition + size > mSize)
-            {
-                throw new Exception("Read error");
-            }
+            Debug.Assert(mPosition + size <= mSize);
         }
     }
 }

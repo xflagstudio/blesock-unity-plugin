@@ -81,7 +81,8 @@ namespace BleSock
             mAuthData = null;
             mLocalPlayerName = null;
             mPlayers.Clear();
-            mMessageBuffer = null;
+            mSendBuffer = null;
+            mReceiveBuffer = null;
         }
 
         public void Dispose()
@@ -116,7 +117,8 @@ namespace BleSock
         protected byte[] mAuthData;
         protected string mLocalPlayerName;
         protected List<Player> mPlayers = new List<Player>();
-        protected Buffer mMessageBuffer;
+        protected MessageBuffer mSendBuffer;
+        protected MessageBuffer mReceiveBuffer;
 
 
         protected void InitializeInternal(string protocolIdentifier, string playerName, SynchronizationContext synchronizationContext)
@@ -152,7 +154,9 @@ namespace BleSock
             mAuthData = deriveBytes.GetBytes(16);
 
             mLocalPlayerName = playerName;
-            mMessageBuffer = new Buffer();
+
+            mSendBuffer = new MessageBuffer();
+            mReceiveBuffer = new MessageBuffer();
         }
 
         protected int PrepareSend(byte[] message, int messageSize, int receiver)

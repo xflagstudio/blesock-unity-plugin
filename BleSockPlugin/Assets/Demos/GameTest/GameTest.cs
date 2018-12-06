@@ -54,7 +54,8 @@ public class GameTest : MonoBehaviour
 
 
     private BleSock.PeerBase mPeer;
-    private BleSock.Buffer mMessageBuffer = new BleSock.Buffer();
+    private BleSock.MessageBuffer mSendBuffer = new BleSock.MessageBuffer();
+    private BleSock.MessageBuffer mReceiveBuffer = new BleSock.MessageBuffer();
 
     private List<PlayerCharacter> mPlayerCharacters = new List<PlayerCharacter>();
     private List<Bullet> mBullets = new List<Bullet>();
@@ -149,7 +150,7 @@ public class GameTest : MonoBehaviour
 
     private void WriteFloat(float value)
     {
-        mMessageBuffer.Write(Mathf.FloatToHalf(value));
+        mSendBuffer.Write(Mathf.FloatToHalf(value));
     }
 
     private void WriteVector2(Vector2 value)
@@ -170,11 +171,11 @@ public class GameTest : MonoBehaviour
 
                 // MSG_REVIVE
 
-                mMessageBuffer.Clear();
-                mMessageBuffer.Write(MSG_REVIVE);
+                mSendBuffer.Clear();
+                mSendBuffer.Write(MSG_REVIVE);
                 WriteVector2(mMyPlayerCharacter.position);
 
-                mPeer.Send(mMessageBuffer.RawData, mMessageBuffer.Size, BleSock.Address.Others);
+                mPeer.Send(mSendBuffer.RawData, mSendBuffer.Size, BleSock.Address.Others);
             }
 
             return;
@@ -220,12 +221,12 @@ public class GameTest : MonoBehaviour
 
             // MSG_DIE
 
-            mMessageBuffer.Clear();
-            mMessageBuffer.Write(MSG_DIE);
-            mMessageBuffer.Write(bullet.playerId);
-            mMessageBuffer.Write(bullet.bulletId);
+            mSendBuffer.Clear();
+            mSendBuffer.Write(MSG_DIE);
+            mSendBuffer.Write(bullet.playerId);
+            mSendBuffer.Write(bullet.bulletId);
 
-            mPeer.Send(mMessageBuffer.RawData, mMessageBuffer.Size, BleSock.Address.Others);
+            mPeer.Send(mSendBuffer.RawData, mSendBuffer.Size, BleSock.Address.Others);
 
             break;
         }
@@ -269,14 +270,14 @@ public class GameTest : MonoBehaviour
 
             // MSG_SYNC
 
-            mMessageBuffer.Clear();
-            mMessageBuffer.Write(MSG_SYNC);
+            mSendBuffer.Clear();
+            mSendBuffer.Write(MSG_SYNC);
             WriteVector2(mMyPlayerCharacter.position);
             WriteVector2(mMyPlayerCharacter.velocity);
             WriteFloat(mMyPlayerCharacter.rotation);
-            mMessageBuffer.Write(mMyPlayerCharacter.accelerating);
+            mSendBuffer.Write(mMyPlayerCharacter.accelerating);
 
-            mPeer.Send(mMessageBuffer.RawData, mMessageBuffer.Size, BleSock.Address.Others);
+            mPeer.Send(mSendBuffer.RawData, mSendBuffer.Size, BleSock.Address.Others);
         }
     }
 
@@ -307,13 +308,13 @@ public class GameTest : MonoBehaviour
 
                 // MSG_SHOOT
 
-                mMessageBuffer.Clear();
-                mMessageBuffer.Write(MSG_SHOOT);
-                mMessageBuffer.Write(bullet.bulletId);
+                mSendBuffer.Clear();
+                mSendBuffer.Write(MSG_SHOOT);
+                mSendBuffer.Write(bullet.bulletId);
                 WriteVector2(bullet.position);
                 WriteVector2(bullet.velocity);
 
-                mPeer.Send(mMessageBuffer.RawData, mMessageBuffer.Size, BleSock.Address.Others);
+                mPeer.Send(mSendBuffer.RawData, mSendBuffer.Size, BleSock.Address.Others);
             }
 
             yield return null;
@@ -563,17 +564,17 @@ public class GameTest : MonoBehaviour
 
         // MSG_SPAWN
 
-        mMessageBuffer.Clear();
-        mMessageBuffer.Write(MSG_SPAWN);
+        mSendBuffer.Clear();
+        mSendBuffer.Write(MSG_SPAWN);
         WriteFloat(mMyColor);
         WriteVector2(mMyPlayerCharacter.position);
         WriteVector2(mMyPlayerCharacter.velocity);
         WriteFloat(mMyPlayerCharacter.rotation);
-        mMessageBuffer.Write(mMyPlayerCharacter.accelerating);
-        mMessageBuffer.Write(mMyPlayerCharacter.alive);
-        mMessageBuffer.Write(mMyPlayerCharacter.score);
+        mSendBuffer.Write(mMyPlayerCharacter.accelerating);
+        mSendBuffer.Write(mMyPlayerCharacter.alive);
+        mSendBuffer.Write(mMyPlayerCharacter.score);
 
-        mPeer.Send(mMessageBuffer.RawData, mMessageBuffer.Size, receiver);
+        mPeer.Send(mSendBuffer.RawData, mSendBuffer.Size, receiver);
     }
 
     private void OnPlayerJoin(BleSock.Player player)
@@ -597,84 +598,86 @@ public class GameTest : MonoBehaviour
 
     private void OnReceive(byte[] message, int messageSize, BleSock.Player sender)
     {
-        var buffer = new BleSock.Buffer(message, messageSize);
+        mReceiveBuffer.Clear();
+        mReceiveBuffer.WriteBytes(message, 0, messageSize);
+        mReceiveBuffer.Seek(0);
 
-        switch (buffer.ReadByte())
+        switch (mReceiveBuffer.ReadByte())
         {
             case MSG_SPAWN:
-                OnReceiveSpawn(buffer, sender);
+                OnReceiveSpawn(sender);
                 break;
 
             case MSG_SYNC:
-                OnReceiveSync(buffer, sender);
+                OnReceiveSync(sender);
                 break;
 
             case MSG_SHOOT:
-                OnReceiveShoot(buffer, sender);
+                OnReceiveShoot(sender);
                 break;
 
             case MSG_DIE:
-                OnReceiveDie(buffer, sender);
+                OnReceiveDie(sender);
                 break;
 
             case MSG_REVIVE:
-                OnReceiveRevive(buffer, sender);
+                OnReceiveRevive(sender);
                 break;
         }
     }
 
-    private float ReadFloat(BleSock.Buffer buffer)
+    private float ReadFloat()
     {
-        return Mathf.HalfToFloat(buffer.ReadUInt16());
+        return Mathf.HalfToFloat(mReceiveBuffer.ReadUInt16());
     }
 
-    private Vector2 ReadVector2(BleSock.Buffer buffer)
+    private Vector2 ReadVector2()
     {
-        float x = ReadFloat(buffer);
-        float y = ReadFloat(buffer);
+        float x = ReadFloat();
+        float y = ReadFloat();
 
         return new Vector2(x, y);
     }
 
-    private void OnReceiveSpawn(BleSock.Buffer buffer, BleSock.Player sender)
+    private void OnReceiveSpawn(BleSock.Player sender)
     {
         var playerCharacter = Instantiate(playerCharacterOriginal, charactersRoot, false);
-        playerCharacter.Setup(sender.PlayerId, sender.PlayerName, Color.HSVToRGB(ReadFloat(buffer), 1, 1));
-        playerCharacter.Spawn(ReadVector2(buffer));
-        playerCharacter.velocity = ReadVector2(buffer);
-        playerCharacter.rotation = ReadFloat(buffer);
-        playerCharacter.accelerating = buffer.ReadBoolean();
-        playerCharacter.alive = buffer.ReadBoolean();
-        playerCharacter.score = buffer.ReadInt32();
+        playerCharacter.Setup(sender.PlayerId, sender.PlayerName, Color.HSVToRGB(ReadFloat(), 1, 1));
+        playerCharacter.Spawn(ReadVector2());
+        playerCharacter.velocity = ReadVector2();
+        playerCharacter.rotation = ReadFloat();
+        playerCharacter.accelerating = mReceiveBuffer.ReadBoolean();
+        playerCharacter.alive = mReceiveBuffer.ReadBoolean();
+        playerCharacter.score = mReceiveBuffer.ReadInt32();
 
         mPlayerCharacters.Add(playerCharacter);
     }
 
-    private void OnReceiveSync(BleSock.Buffer buffer, BleSock.Player sender)
+    private void OnReceiveSync(BleSock.Player sender)
     {
         var playerCharacter = mPlayerCharacters.Where(pc => pc.playerId == sender.PlayerId).FirstOrDefault();
         if (playerCharacter != null)
         {
-            playerCharacter.position = ReadVector2(buffer);
-            playerCharacter.velocity = ReadVector2(buffer);
-            playerCharacter.rotation = ReadFloat(buffer);
-            playerCharacter.accelerating = buffer.ReadBoolean();
+            playerCharacter.position = ReadVector2();
+            playerCharacter.velocity = ReadVector2();
+            playerCharacter.rotation = ReadFloat();
+            playerCharacter.accelerating = mReceiveBuffer.ReadBoolean();
         }
     }
 
-    private void OnReceiveShoot(BleSock.Buffer buffer, BleSock.Player sender)
+    private void OnReceiveShoot(BleSock.Player sender)
     {
         var playerCharacter = mPlayerCharacters.Where(pc => pc.playerId == sender.PlayerId).FirstOrDefault();
         if (playerCharacter != null)
         {
-            int bulletId = buffer.ReadInt32();
-            Vector2 position = ReadVector2(buffer);
-            Vector2 velocity = ReadVector2(buffer);
+            int bulletId = mReceiveBuffer.ReadInt32();
+            Vector2 position = ReadVector2();
+            Vector2 velocity = ReadVector2();
             SpawnBullet(sender.PlayerId, bulletId, position, velocity, playerCharacter.baseImage.color);
         }
     }
 
-    private void OnReceiveDie(BleSock.Buffer buffer, BleSock.Player sender)
+    private void OnReceiveDie(BleSock.Player sender)
     {
         var playerCharacter = mPlayerCharacters.Where(pc => pc.playerId == sender.PlayerId).FirstOrDefault();
         if (playerCharacter != null)
@@ -682,8 +685,8 @@ public class GameTest : MonoBehaviour
             playerCharacter.Die();
         }
 
-        int killerPlayerId = buffer.ReadInt32();
-        int bulletId = buffer.ReadInt32();
+        int killerPlayerId = mReceiveBuffer.ReadInt32();
+        int bulletId = mReceiveBuffer.ReadInt32();
 
         if (killerPlayerId == mPeer.LocalPlayerId)
         {
@@ -704,12 +707,12 @@ public class GameTest : MonoBehaviour
         }
     }
 
-    private void OnReceiveRevive(BleSock.Buffer buffer, BleSock.Player sender)
+    private void OnReceiveRevive(BleSock.Player sender)
     {
         var playerCharacter = mPlayerCharacters.Where(pc => pc.playerId == sender.PlayerId).FirstOrDefault();
         if (playerCharacter != null)
         {
-            playerCharacter.Spawn(ReadVector2(buffer));
+            playerCharacter.Spawn(ReadVector2());
         }
     }
 

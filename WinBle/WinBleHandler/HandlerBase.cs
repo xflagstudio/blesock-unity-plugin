@@ -1,7 +1,6 @@
 ﻿using System;
 using System.IO;
 using System.Diagnostics;
-using System.Threading;
 
 using UnityEngine;
 
@@ -31,7 +30,7 @@ namespace BleSock.Windows
             {
                 FileName = Path.Combine(Application.dataPath, executionFilePath),
                 Arguments = arguments,
-                UseShellExecute = false,
+                // UseShellExecute = false,
             };
 
             mProcess = Process.Start(startInfo);
